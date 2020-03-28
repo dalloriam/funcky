@@ -4,7 +4,6 @@ pub struct TestFn;
 impl TestFn {
     fn run(&self) {
         println!("I just got called");
-        panic!();
     }
 }
 

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use libloading::{Library, Symbol};
 
-use crate::error::*;
-use crate::Funcktion;
+use funck::error::*;
+use funck::Funcktion;
 
 /// The FunckLoader manages all Funcks currently loaded, as well as their associated dylibs.
 pub struct FunckLoader {
@@ -22,7 +22,7 @@ impl FunckLoader {
     }
 
     pub fn load_funcktion<P: AsRef<OsStr>>(&mut self, dylib_file: P) -> Result<()> {
-        let lib = Library::new(dylib_file.as_ref()).context(crate::error::LoadingError {
+        let lib = Library::new(dylib_file.as_ref()).context(funck::error::LoadingError {
             path: PathBuf::from(dylib_file.as_ref()),
         })?;
 
@@ -30,7 +30,7 @@ impl FunckLoader {
             type FunckCreate = unsafe fn() -> *mut dyn Funcktion;
             let constructor: Symbol<FunckCreate> =
                 lib.get(b"_funck_create")
-                    .context(crate::error::LoadingError {
+                    .context(funck::error::LoadingError {
                         path: PathBuf::from(dylib_file.as_ref()),
                     })?;
 
@@ -41,7 +41,6 @@ impl FunckLoader {
 
         self.loaded_libraries
             .insert(String::from(funcktion.name()), lib);
-        println!("Loaded funck: {}", funcktion.name());
         self.funcks
             .insert(String::from(funcktion.name()), funcktion);
 
