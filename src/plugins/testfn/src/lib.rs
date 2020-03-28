@@ -1,14 +1,11 @@
 #[derive(Debug, Default)]
-pub struct TestFn {}
+pub struct TestFn;
 
-impl funck::Funcktion for TestFn {
-    fn name(&self) -> &'static str {
-        "hello_fn"
-    }
-
-    fn call(&self) {
+impl TestFn {
+    fn run(&self) {
         println!("I just got called");
+        panic!();
     }
 }
 
-funck::export!(TestFn, TestFn::default);
+funck::export!(TestFn, TestFn::run, "hello_fn");

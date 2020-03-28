@@ -10,5 +10,10 @@ fn main() {
 
     let mut loader = FunckLoader::new();
     loader.load_funcktion(PLUGIN_SO_FILE).unwrap();
-    loader.call("hello_fn").unwrap();
+    match loader.call("hello_fn") {
+        Ok(()) => println!("Call OK"),
+        Err(funck::error::Error::CallError) => println!("Runtime error occurred"),
+        Err(_) => panic!("Unknown error"),
+    }
+    println!("DONE");
 }
