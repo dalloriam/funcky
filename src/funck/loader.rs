@@ -7,6 +7,7 @@ use rood::{Cause, CausedResult, Error};
 
 use crate::Funcktion;
 
+/// export defines the FFI wrapper around the `Box<dyn Funcktion>` structure defined manually in the plugin.
 #[macro_export]
 macro_rules! export {
     ($function_type:ty, $constructor:path) => {
@@ -20,6 +21,7 @@ macro_rules! export {
     };
 }
 
+/// The FunckLoader manages all Funcks currently loaded, as well as their associated dylibs.
 pub struct FunckLoader {
     funcks: HashMap<String, Box<dyn Funcktion>>,
     loaded_libraries: HashMap<String, Library>,
