@@ -1,0 +1,2 @@
+# funcky
+Minimalist FaaS host
