@@ -1,32 +1,14 @@
-use std::io;
-use std::path::PathBuf;
+use std::fmt;
 
-use snafu::Snafu;
-pub use snafu::{ensure, ResultExt};
+#[derive(Debug, Default, Clone)]
+pub struct CallError;
 
-#[derive(Debug, Snafu)]
-#[snafu(visibility = "pub")]
-pub enum Error {
-    #[snafu(display("Funcktion [{}] not found", name))]
-    NotFound { name: String },
-
-    #[snafu(display("Build error: {}", source.to_string()))]
-    BuildError { source: io::Error },
-
-    #[snafu(display("Build failed (nonzero exit code)"))]
-    BuildFailedStatus,
-
-    #[snafu(display("Directory does not exist: {}", source.to_string()))]
-    DirNotExist { source: io::Error },
-
-    #[snafu(display("Error loading shared object from {}", path.display()))]
-    LoadingError { path: PathBuf, source: io::Error },
-
-    #[snafu(display("Couldn't acquire lock: poisoned."))]
-    ConcurrencyError,
-
-    #[snafu(display("Error occurred during call"))]
-    CallError,
+impl fmt::Display for CallError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FFI Call error")
+    }
 }
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+impl std::error::Error for CallError {}
+
+pub type CallResult<T> = Result<T, CallError>;

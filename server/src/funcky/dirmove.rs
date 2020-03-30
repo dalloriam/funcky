@@ -1,16 +1,15 @@
 use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
-
-use funck::error::*;
 
 pub struct DirHook {
     return_path: PathBuf,
 }
 
 impl DirHook {
-    pub fn new<P: AsRef<Path>>(new_path: P) -> Result<DirHook> {
-        let cur_dir = env::current_dir().unwrap(); // TODO: Handle.
-        env::set_current_dir(new_path.as_ref()).context(DirNotExist)?;
+    pub fn new<P: AsRef<Path>>(new_path: P) -> io::Result<DirHook> {
+        let cur_dir = env::current_dir()?;
+        env::set_current_dir(new_path.as_ref())?;
         Ok(DirHook {
             return_path: cur_dir,
         })

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -7,7 +7,10 @@ use std::time::Duration;
 use env_logger::Env;
 
 mod server;
-use server::{Config, FunckManager, Server};
+use server::Server;
+
+mod funcky;
+use funcky::{Config, FunckManager};
 
 const SO_DIR: &str = "./shared_object";
 
@@ -37,15 +40,24 @@ async fn main() {
         tmp_dir: PathBuf::from("build_tmp"),
     };
     let manager = FunckManager::new(config);
+    if let Err(e) = manager.add("bing") {
+        log::error!("{}", e);
+        return;
+    }
 
     log::info!("server starting up...");
     let mut server = Server::new(manager);
-    server.start();
+    if let Err(e) = server.start() {
+        log::error!("{}", e);
+        return;
+    }
 
     log::info!("HTTP server started");
     block_til_ctrlc();
 
     log::info!("exit signal received, waiting for server to terminate...");
-    server.stop().await.unwrap();
+    if let Err(e) = server.stop().await {
+        log::error!("{}", e);
+    }
     log::info!("goodbye");
 }

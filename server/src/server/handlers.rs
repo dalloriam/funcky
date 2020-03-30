@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use bytes::{Buf, Bytes};
+use bytes::Buf;
 
 use futures::StreamExt;
 
@@ -11,10 +11,10 @@ use tempfile::TempDir;
 use warp::reply;
 
 use super::zip;
-use super::FunckManager;
+use crate::funcky::FunckManager;
 
 async fn add_part(manager: Arc<FunckManager>, mut part: warp::multipart::Part) {
-    let mut body = part.data().await.unwrap().unwrap(); // TODO: Handle
+    let body = part.data().await.unwrap().unwrap(); // TODO: Handle
     let dir = TempDir::new_in(&manager.cfg.tmp_dir).unwrap(); // TODO: Handle.
 
     let fname = Path::new(part.filename().unwrap());

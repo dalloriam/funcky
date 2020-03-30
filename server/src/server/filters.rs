@@ -3,7 +3,7 @@ use std::sync::Arc;
 use warp::Filter;
 
 use super::handlers;
-use super::FunckManager;
+use crate::funcky::FunckManager;
 
 const ADD_FUNCTION_ROUTE_PATH: &str = "add";
 

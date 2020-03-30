@@ -10,4 +10,3 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-snafu = "0.6.3"
