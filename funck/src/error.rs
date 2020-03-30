@@ -22,6 +22,9 @@ pub enum Error {
     #[snafu(display("Error loading shared object from {}", path.display()))]
     LoadingError { path: PathBuf, source: io::Error },
 
+    #[snafu(display("Couldn't acquire lock: poisoned."))]
+    ConcurrencyError,
+
     #[snafu(display("Error occurred during call"))]
     CallError,
 }

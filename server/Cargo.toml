@@ -11,6 +11,14 @@ name = "funcky"
 path = "src/main.rs"
 
 [dependencies]
+bytes = "0.5"
+ctrlc = "3.1"
+env_logger = "0.7"
+futures = "0.3.4"
 libloading = "0.5.2"
+log = "0.4"
 funck = { path = "../funck" }
 snafu = "0.6.3"
+tempfile = "3.1.0"
+tokio = { version = "0.2", features = ["full"]}
+warp = "0.2.2"

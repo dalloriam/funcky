@@ -25,12 +25,6 @@ impl FunckBuilder {
             .to_string_lossy()
             .to_string();
 
-        let so_file_path = std::fs::canonicalize(PathBuf::from(&format!(
-            "./target/release/lib{}.so",
-            project_name
-        )))
-        .context(BuildError)?;
-
         let mut cmd = Command::new("cargo")
             .arg("build")
             .arg("--release")
@@ -39,6 +33,12 @@ impl FunckBuilder {
 
         let res = cmd.wait().context(BuildError)?;
         ensure!(res.success(), BuildFailedStatus);
+
+        let so_file_path = std::fs::canonicalize(PathBuf::from(&format!(
+            "./target/release/lib{}.so",
+            project_name
+        )))
+        .context(BuildError)?;
 
         Ok(so_file_path)
     }

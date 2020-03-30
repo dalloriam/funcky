@@ -47,7 +47,7 @@ impl FunckLoader {
         Ok(())
     }
 
-    pub fn call(&mut self, function_name: &str) -> Result<()> {
+    pub fn call(&self, function_name: &str) -> Result<()> {
         self.funcks
             .get(function_name)
             .ok_or_else(|| Error::NotFound {

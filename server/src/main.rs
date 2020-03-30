@@ -1,23 +1,51 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+
+use env_logger::Env;
 
 mod server;
-use server::{FunckBuilder, FunckLoader};
+use server::{Config, FunckManager, Server};
 
-const PLUGIN_PATH: &str = "../samples/testfn";
+const SO_DIR: &str = "./shared_object";
 
-fn main() {
-    assert!(Path::new(PLUGIN_PATH).exists());
+fn block_til_ctrlc() {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
 
-    let mut builder = FunckBuilder::new();
-    let shared_object = builder.build(PLUGIN_PATH).unwrap();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C Handler");
 
-    let mut loader = FunckLoader::new();
-    loader.load_funcktion(&shared_object).unwrap();
-    match loader.call("hello_fn") {
-        Ok(()) => println!("Call OK"),
-        Err(e) => {
-            println!("Error occured: {:?}", e);
-        }
+    while running.load(Ordering::SeqCst) {
+        thread::sleep(Duration::from_millis(500));
     }
-    println!("DONE");
+}
+
+fn init_logger() {
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
+}
+
+#[tokio::main]
+async fn main() {
+    init_logger();
+    let config = Config {
+        shared_object_directory: PathBuf::from(SO_DIR),
+        tmp_dir: PathBuf::from("build_tmp"),
+    };
+    let manager = FunckManager::new(config);
+
+    log::info!("server starting up...");
+    let mut server = Server::new(manager);
+    server.start();
+
+    log::info!("HTTP server started");
+    block_til_ctrlc();
+
+    log::info!("exit signal received, waiting for server to terminate...");
+    server.stop().await.unwrap();
+    log::info!("goodbye");
 }
