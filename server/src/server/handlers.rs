@@ -10,8 +10,11 @@ use tempfile::TempDir;
 
 use warp::reply;
 
+use super::message::Message;
 use super::zip;
-use crate::funcky::FunckManager;
+use crate::funcky::{Error as MgError, FunckManager};
+
+impl warp::reject::Reject for MgError {}
 
 async fn add_part(manager: Arc<FunckManager>, mut part: warp::multipart::Part) {
     let body = part.data().await.unwrap().unwrap(); // TODO: Handle
@@ -46,19 +49,16 @@ pub async fn add(
             add_part(manager.clone(), part).await;
         }
     }
-
-    manager.call("hello_fn").unwrap();
-
-    Ok(reply::json(&String::from("OK")))
+    Ok(reply::json(&Message::new("OK")))
 }
 
 pub async fn call(
     manager: Arc<FunckManager>,
     path: warp::path::Tail,
-) -> Result<impl warp::Reply, std::convert::Infallible> {
+) -> Result<impl warp::Reply, warp::Rejection> {
     log::info!("POST{}", path.as_str());
     match manager.call(path.as_str()) {
-        Ok(_) => Ok(reply::json(&String::from("OK"))),
-        Err(e) => Ok(reply::json(&format!("{}", e))),
+        Ok(_) => Ok(reply::json(&Message::new("OK"))),
+        Err(e) => Err(warp::reject::custom(e)),
     }
 }
