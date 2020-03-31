@@ -1,20 +1,24 @@
 [package]
-name = "funcky"
+name = "server"
 version = "0.1.0"
 authors = ["William Dussault <dalloriam@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-name = "funck"
-path = "src/funck/lib.rs"
-crate-type = ["cdylib", "rlib"]
-
 [[bin]]
 name = "funcky"
 path = "src/main.rs"
 
 [dependencies]
-libloading = "0.5"
-rood = "0.1.4"
+bytes = "0.5"
+ctrlc = "3.1"
+env_logger = "0.7"
+futures = "0.3.4"
+libloading = "0.5.2"
+log = "0.4"
+funck = { path = "../funck" }
+snafu = "0.6.3"
+tempfile = "3.1.0"
+tokio = { version = "0.2", features = ["full"]}
+warp = "0.2.2"

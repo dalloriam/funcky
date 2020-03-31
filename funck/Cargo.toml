@@ -1,11 +1,12 @@
 [package]
-name = "testfn"
+name = "funck"
 version = "0.1.0"
 authors = ["William Dussault <dalloriam@gmail.com>"]
 edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-funcky = {path = "../../../"}
