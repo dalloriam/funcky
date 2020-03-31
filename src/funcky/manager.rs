@@ -22,6 +22,9 @@ pub enum Error {
     CantMoveSharedObject {
         source: io::Error,
     },
+    InitializationError {
+        source: io::Error,
+    },
     MissingFileName,
     MissingSharedObject,
     LoaderLockFailure,
@@ -43,20 +46,56 @@ pub struct FunckManager {
 }
 
 impl FunckManager {
-    pub fn new(cfg: Config) -> FunckManager {
-        // Ensure shared object directory exists.
-        if !cfg.shared_object_directory.exists() {
-            fs::create_dir_all(&cfg.shared_object_directory).unwrap(); // TODO: Handle
-        }
-
-        if !cfg.tmp_dir.exists() {
-            fs::create_dir_all(&cfg.tmp_dir).unwrap();
-        }
-        FunckManager {
+    pub fn new(cfg: Config) -> Result<FunckManager> {
+        FunckManager::ensure_dirs_exist(&cfg)?;
+        let mut manager = FunckManager {
             builder: FunckBuilder::new(),
             cfg,
             loader: RwLock::new(FunckLoader::new()),
+        };
+
+        // Perform initial loading of .so files.
+        manager.refresh_shared_objects()?;
+        Ok(manager)
+    }
+
+    fn ensure_dirs_exist(cfg: &Config) -> Result<()> {
+        log::debug!("initializing directories...");
+        // Ensure shared object directory exists.
+        if !cfg.shared_object_directory.exists() {
+            fs::create_dir_all(&cfg.shared_object_directory).context(InitializationError)?;
         }
+
+        if !cfg.tmp_dir.exists() {
+            fs::create_dir_all(&cfg.tmp_dir).context(InitializationError)?;
+        }
+        Ok(())
+    }
+
+    fn refresh_shared_objects(&mut self) -> Result<()> {
+        log::info!("refreshing loaded shared objects...");
+        let mut fn_loader = FunckLoader::new();
+        for f in fs::read_dir(&self.cfg.shared_object_directory)
+            .context(InitializationError)?
+            .filter_map(|e| e.ok())
+        {
+            if let Some(ext) = f.path().extension() {
+                if ext != "so" {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            log::info!("found shared library: {}", f.path().display());
+
+            // Load .so file.
+            fn_loader.load_funcktion(f.path()).context(LoadError)?;
+        }
+
+        std::mem::swap(&mut self.loader, &mut RwLock::new(fn_loader));
+        log::info!("refresh complete");
+        Ok(())
     }
 
     pub fn add<P: AsRef<Path>>(&self, src_dir: P) -> Result<()> {

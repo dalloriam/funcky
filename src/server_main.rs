@@ -39,10 +39,15 @@ async fn main() {
         shared_object_directory: PathBuf::from(SO_DIR),
         tmp_dir: PathBuf::from("build_tmp"),
     };
+
     let manager = FunckManager::new(config);
+    if let Err(e) = manager {
+        log::error!("{}", e);
+        return;
+    }
 
     log::info!("server starting up...");
-    let mut server = Server::new(manager);
+    let mut server = Server::new(manager.unwrap());
     if let Err(e) = server.start() {
         log::error!("{}", e);
         return;
