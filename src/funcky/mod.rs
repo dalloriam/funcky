@@ -9,4 +9,4 @@ use dirmove::DirHook;
 use loader::FunckLoader;
 
 // === Public Exports ===
-pub use manager::{Config, FunckManager};
+pub use manager::{BuilderError, Config, Error, FunckManager, LoaderError};

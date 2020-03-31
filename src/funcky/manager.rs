@@ -5,8 +5,8 @@ use std::sync::RwLock;
 
 use snafu::{ResultExt, Snafu};
 
-use super::builder::Error as BuilderError;
-use super::loader::Error as LoaderError;
+pub use super::builder::Error as BuilderError;
+pub use super::loader::Error as LoaderError;
 use super::{FunckBuilder, FunckLoader};
 
 #[derive(Debug, Snafu)]
@@ -14,6 +14,7 @@ pub enum Error {
     BuildFailure {
         source: BuilderError,
     },
+    #[snafu(display("Error calling function: {}", source))]
     CallError {
         source: LoaderError,
     },

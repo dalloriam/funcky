@@ -8,7 +8,7 @@ edition = "2018"
 
 [[bin]]
 name = "funcky"
-path = "src/main.rs"
+path = "src/server_main.rs"
 
 [dependencies]
 bytes = "0.5"
@@ -18,6 +18,8 @@ futures = "0.3.4"
 libloading = "0.5.2"
 log = "0.4"
 funck = "0.1"
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
 snafu = "0.6.3"
 tempfile = "3.1.0"
 tokio = { version = "0.2", features = ["full"]}
