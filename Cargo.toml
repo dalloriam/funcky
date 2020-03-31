@@ -8,7 +8,7 @@ edition = "2018"
 
 [[bin]]
 name = "funcky"
-path = "src/main.rs"
+path = "src/server_main.rs"
 
 [dependencies]
 bytes = "0.5"
