@@ -1,4 +1,5 @@
 mod builder;
+mod compiler;
 mod dirmove;
 mod loader;
 mod manager;
@@ -9,4 +10,4 @@ use dirmove::DirHook;
 use loader::FunckLoader;
 
 // === Public Exports ===
-pub use manager::{BuilderError, Config, Error, FunckManager, LoaderError};
+pub use manager::{Config, Error, FunckManager, LoaderError};

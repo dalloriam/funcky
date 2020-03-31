@@ -6,9 +6,9 @@ pub fn unzip(zip_file: &Path, tgt_dir: &Path) -> io::Result<()> {
     // TODO: Validate that unzip is installed.
     // This throws a bad error.
     let mut child = Command::new("unzip")
-        .arg(zip_file.to_str().unwrap())
+        .arg(zip_file.to_string_lossy().as_ref())
         .arg("-d")
-        .arg(tgt_dir.to_str().unwrap())
+        .arg(tgt_dir.to_string_lossy().as_ref())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
