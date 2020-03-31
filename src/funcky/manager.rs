@@ -1,7 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{RwLock, RwLockWriteGuard};
+use std::sync::RwLock;
 
 use snafu::{ResultExt, Snafu};
 
