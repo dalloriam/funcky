@@ -8,4 +8,4 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-funck = {path = "/home/wdussault/src/github.com/dalloriam/funcky/funck"}
+funck = "0.1"

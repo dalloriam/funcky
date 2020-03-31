@@ -40,10 +40,6 @@ async fn main() {
         tmp_dir: PathBuf::from("build_tmp"),
     };
     let manager = FunckManager::new(config);
-    if let Err(e) = manager.add("bing") {
-        log::error!("{}", e);
-        return;
-    }
 
     log::info!("server starting up...");
     let mut server = Server::new(manager);

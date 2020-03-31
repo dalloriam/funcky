@@ -51,3 +51,14 @@ pub async fn add(
 
     Ok(reply::json(&String::from("OK")))
 }
+
+pub async fn call(
+    manager: Arc<FunckManager>,
+    path: warp::path::Tail,
+) -> Result<impl warp::Reply, std::convert::Infallible> {
+    log::info!("POST{}", path.as_str());
+    match manager.call(path.as_str()) {
+        Ok(_) => Ok(reply::json(&String::from("OK"))),
+        Err(e) => Ok(reply::json(&format!("{}", e))),
+    }
+}
