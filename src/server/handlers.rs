@@ -8,13 +8,13 @@ use futures::StreamExt;
 
 use snafu::{ResultExt, Snafu};
 
-use tempfile::TempDir;
+use tempfile::NamedTempFile;
 
 use warp::{http::StatusCode, reply};
 
 use super::message::{ErrorMessage, Message};
 use super::zip;
-use crate::funcky::{Error as MgError, FunckManager};
+use crate::funcky::{DropDir, Error as MgError, FunckManager};
 
 impl warp::reject::Reject for MgError {}
 
@@ -45,21 +45,29 @@ async fn add_part(
         .ok_or(Error::MissingPartData)?
         .context(FailedToReadBody)?;
 
-    let dir = TempDir::new_in(&manager.cfg.tmp_dir).unwrap(); // TODO: Handle.
-
     let fname = Path::new(part.filename().unwrap());
     let project_name = fname.file_stem().unwrap();
 
+    // TODO: Use a tempdir or a tempdir-like abstraction for the compilation request so that it
+    // gets dropped once compilation is done.
+
     // Save zip file.
-    let dst_zip_path = dir.path().join("tmp.zip");
-    log::debug!("writing source zip to {}", dst_zip_path.display());
-    fs::write(&dst_zip_path, body.bytes()).unwrap(); // TODO: Handle.
+    let dst_zip_path = NamedTempFile::new_in(&manager.cfg.tmp_dir).unwrap();
+    log::debug!("writing source zip to {}", dst_zip_path.path().display());
+    fs::write(&dst_zip_path.path(), body.bytes()).unwrap(); // TODO: Handle.
 
     // Extract zip file.
-    let tgt_dir = dir.path().join(project_name);
-    log::debug!("unzip {} => {}", dst_zip_path.display(), tgt_dir.display());
+    let tgt_dir = DropDir::new(manager.cfg.tmp_dir.join(project_name)).unwrap(); // TODO: Handle
+    log::debug!(
+        "unzip {} => {}",
+        dst_zip_path.path().display(),
+        tgt_dir.path().display()
+    );
 
-    zip::unzip(&dst_zip_path, &tgt_dir).unwrap();
+    zip::unzip(&dst_zip_path.path(), &tgt_dir.path()).unwrap();
+
+    // Delete zip file.
+    fs::remove_file(dst_zip_path).unwrap(); // TODO: Handle.
 
     // Add to manager.
     manager.add(tgt_dir).context(ManagerAddError)

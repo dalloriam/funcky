@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::ops::DerefMut;
+use std::path::PathBuf;
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
@@ -9,7 +10,6 @@ use snafu::{ResultExt, Snafu};
 use super::compiler;
 pub use super::loader::Error as LoaderError;
 use super::FunckLoader;
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -49,7 +49,7 @@ impl FunckManager {
     pub fn new(cfg: Config) -> Result<FunckManager> {
         FunckManager::ensure_dirs_exist(&cfg)?;
 
-        let mut compile_worker = compiler::Worker::new();
+        let compile_worker = compiler::Worker::new(&cfg.shared_object_directory);
 
         let mut manager = FunckManager {
             cfg,
@@ -96,8 +96,8 @@ impl FunckManager {
                     let mut loader_guard = loader.write().unwrap(); // TODO: Handle.
                     loader_guard.load_funcktion(so_file_path).unwrap(); // TODO: Handle.
                 }
-                Err(e) => {
-                    log::info!("shared object installer disconneced");
+                Err(_e) => {
+                    log::info!("shared object installer disconnected");
                     break;
                 }
             }
@@ -147,7 +147,7 @@ impl FunckManager {
         Ok(())
     }
 
-    pub fn add<P: AsRef<Path>>(&self, src_dir: P) -> Result<()> {
+    pub fn add(&self, src_dir: super::DropDir) -> Result<()> {
         // Build the function.
         self.compile_worker
             .new_job(compiler::Request::new(src_dir))

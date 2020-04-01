@@ -40,14 +40,17 @@ async fn main() {
         tmp_dir: PathBuf::from("build_tmp"),
     };
 
-    let manager = FunckManager::new(config);
-    if let Err(e) = manager {
+    let r_manager = FunckManager::new(config);
+    if let Err(e) = r_manager {
         log::error!("{}", e);
         return;
     }
 
+    let mut manager = r_manager.unwrap();
+    manager.start();
+
     log::info!("server starting up...");
-    let mut server = Server::new(manager.unwrap());
+    let mut server = Server::new(manager);
     if let Err(e) = server.start() {
         log::error!("{}", e);
         return;
