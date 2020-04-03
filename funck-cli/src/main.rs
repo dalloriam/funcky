@@ -1,6 +1,11 @@
 mod cli;
+mod sysutil;
+
+use clap::Clap;
 
 use rood::cli::OutputManager;
+
+use cli::CLI;
 
 #[tokio::main]
 async fn main() {

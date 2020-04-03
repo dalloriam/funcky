@@ -17,7 +17,7 @@ env_logger = "0.7"
 futures = "0.3.4"
 libloading = "0.5.2"
 log = "0.4"
-funck = "0.1"
+funck = { path = "../libfunck" }
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 snafu = "0.6.3"
