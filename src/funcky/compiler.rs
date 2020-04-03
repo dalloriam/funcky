@@ -145,58 +145,48 @@ impl Worker {
         so_out_dir: PathBuf,
         status_tracker: Arc<StatusTracker>,
     ) {
-        loop {
-            match incoming_jobs.recv() {
-                Ok(job) => {
-                    status_tracker.update_status(&job.source_directory.name, Status::Compiling);
-                    match job.execute() {
-                        Ok(so_file) => {
-                            // Move the so_file from the temp dir to the dest dir.
-                            let fname_maybe = so_file.file_name();
-                            if fname_maybe.is_none() {
-                                let e = String::from("shared object has no file name");
-                                log::error!("{}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                                continue;
-                            }
+        while let Ok(job) = incoming_jobs.recv() {
+            status_tracker.update_status(&job.source_directory.name, Status::Compiling);
+            match job.execute() {
+                Ok(so_file) => {
+                    // Move the so_file from the temp dir to the dest dir.
+                    let fname_maybe = so_file.file_name();
+                    if fname_maybe.is_none() {
+                        let e = String::from("shared object has no file name");
+                        log::error!("{}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(e.to_string()),
+                        );
+                        continue;
+                    }
 
-                            let fname = fname_maybe.unwrap();
-                            let dst_so_file = so_out_dir.join(fname);
-                            if let Err(e) = fs::rename(so_file, &dst_so_file) {
-                                log::error!("error moving shared object file: {}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                                continue;
-                            }
+                    let fname = fname_maybe.unwrap();
+                    let dst_so_file = so_out_dir.join(fname);
+                    if let Err(e) = fs::rename(so_file, &dst_so_file) {
+                        log::error!("error moving shared object file: {}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(format!("{}", e)),
+                        );
+                        continue;
+                    }
 
-                            if let Err(e) = result_tx.send(Response {
-                                so_path: dst_so_file,
-                                job_name: job.source_directory.name.clone(),
-                            }) {
-                                log::error!("error sending result: {}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("compile error: {}", e);
-                            status_tracker.update_status(
-                                &job.source_directory.name,
-                                Status::Failed(format!("{}", e)),
-                            )
-                        }
+                    if let Err(e) = result_tx.send(Response {
+                        so_path: dst_so_file,
+                        job_name: job.source_directory.name.clone(),
+                    }) {
+                        log::error!("error sending result: {}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(format!("{}", e)),
+                        );
                     }
                 }
-                Err(_e) => {
-                    // Channel was disconnected.
-                    break;
+                Err(e) => {
+                    log::error!("compile error: {}", e);
+                    status_tracker
+                        .update_status(&job.source_directory.name, Status::Failed(format!("{}", e)))
                 }
             };
         }

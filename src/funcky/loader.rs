@@ -91,7 +91,7 @@ impl FunckLoader {
         let library_name = dylib_file
             .as_ref()
             .file_stem()
-            .unwrap_or("libunknown".as_ref())
+            .unwrap_or_else(|| "libunknown".as_ref())
             .to_string_lossy()
             .to_string();
 

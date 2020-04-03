@@ -153,14 +153,13 @@ pub async fn call(
             let body = Body::from(Vec::from(resp.body()));
             let mut http_resp = reply::Response::new(body);
             for (k, v) in resp.metadata().iter().filter_map(|(a, b)| {
-                let name_maybe = header_name(a);
-                let val_maybe = header_val(b);
-                if name_maybe.is_ok() && val_maybe.is_ok() {
-                    Some((name_maybe.unwrap(), val_maybe.unwrap()))
-                } else {
-                    log::warn!("skipped invalid header: [{}={}]", a, b);
-                    None
+                if let Ok(name) = header_name(a) {
+                    if let Ok(val) = header_val(b) {
+                        return Some((name, val));
+                    }
                 }
+                log::warn!("skipped invalid header: [{}={}]", a, b);
+                None
             }) {
                 http_resp.headers_mut().insert(k, v);
             }
