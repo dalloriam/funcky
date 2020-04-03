@@ -26,8 +26,14 @@ pub enum Error {
     #[snafu(display("The final shared object file path ({}) is invalid: {}", path.display(), source))]
     InvalidOutputPath { source: io::Error, path: PathBuf },
 
+    #[snafu(display("Failed to acquire the job channel mutex"))]
+    JobLockError,
+
     #[snafu(display("Couldn't send the job to the compilation worker: {}", source))]
     JobDispatchError { source: mpsc::SendError<Request> },
+
+    #[snafu(display("Worker already started"))]
+    WorkerAlreadyStarted,
 
     #[snafu(display("Compile worker is not started"))]
     WorkerNotStarted,
@@ -118,8 +124,8 @@ impl Worker {
         }
     }
 
-    pub fn start(&mut self) -> mpsc::Receiver<Response> {
-        assert!(self.handle.is_none()); // TODO: Handle properly
+    pub fn start(&mut self) -> Result<mpsc::Receiver<Response>, Error> {
+        ensure!(self.handle.is_none(), WorkerAlreadyStarted);
         let (job_tx, job_rx) = mpsc::channel();
         let (result_tx, result_rx) = mpsc::channel();
         let dst_path = self.shared_object_destination.clone();
@@ -130,7 +136,7 @@ impl Worker {
             job_tx: Mutex::new(job_tx),
         };
         self.handle = Some(work_handle);
-        result_rx
+        Ok(result_rx)
     }
 
     fn compile_loop(
@@ -139,58 +145,48 @@ impl Worker {
         so_out_dir: PathBuf,
         status_tracker: Arc<StatusTracker>,
     ) {
-        loop {
-            match incoming_jobs.recv() {
-                Ok(job) => {
-                    status_tracker.update_status(&job.source_directory.name, Status::Compiling);
-                    match job.execute() {
-                        Ok(so_file) => {
-                            // Move the so_file from the temp dir to the dest dir.
-                            let fname_maybe = so_file.file_name();
-                            if fname_maybe.is_none() {
-                                let e = String::from("shared object has no file name");
-                                log::error!("{}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                                continue;
-                            }
+        while let Ok(job) = incoming_jobs.recv() {
+            status_tracker.update_status(&job.source_directory.name, Status::Compiling);
+            match job.execute() {
+                Ok(so_file) => {
+                    // Move the so_file from the temp dir to the dest dir.
+                    let fname_maybe = so_file.file_name();
+                    if fname_maybe.is_none() {
+                        let e = String::from("shared object has no file name");
+                        log::error!("{}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(e.to_string()),
+                        );
+                        continue;
+                    }
 
-                            let fname = fname_maybe.unwrap();
-                            let dst_so_file = so_out_dir.join(fname);
-                            if let Err(e) = fs::rename(so_file, &dst_so_file) {
-                                log::error!("error moving shared object file: {}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                                continue;
-                            }
+                    let fname = fname_maybe.unwrap();
+                    let dst_so_file = so_out_dir.join(fname);
+                    if let Err(e) = fs::rename(so_file, &dst_so_file) {
+                        log::error!("error moving shared object file: {}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(format!("{}", e)),
+                        );
+                        continue;
+                    }
 
-                            if let Err(e) = result_tx.send(Response {
-                                so_path: dst_so_file,
-                                job_name: job.source_directory.name.clone(),
-                            }) {
-                                log::error!("error sending result: {}", e);
-                                status_tracker.update_status(
-                                    &job.source_directory.name,
-                                    Status::Failed(format!("{}", e)),
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("compile error: {}", e);
-                            status_tracker.update_status(
-                                &job.source_directory.name,
-                                Status::Failed(format!("{}", e)),
-                            )
-                        }
+                    if let Err(e) = result_tx.send(Response {
+                        so_path: dst_so_file,
+                        job_name: job.source_directory.name.clone(),
+                    }) {
+                        log::error!("error sending result: {}", e);
+                        status_tracker.update_status(
+                            &job.source_directory.name,
+                            Status::Failed(format!("{}", e)),
+                        );
                     }
                 }
-                Err(_e) => {
-                    // Channel was disconnected.
-                    break;
+                Err(e) => {
+                    log::error!("compile error: {}", e);
+                    status_tracker
+                        .update_status(&job.source_directory.name, Status::Failed(format!("{}", e)))
                 }
             };
         }
@@ -198,7 +194,7 @@ impl Worker {
 
     pub fn new_job(&self, job: Request) -> Result<(), Error> {
         if let Some(worker) = &self.handle {
-            let mtx_handle = worker.job_tx.lock().unwrap(); // TODO: Handle
+            let mtx_handle = worker.job_tx.lock().map_err(|_e| Error::JobLockError)?;
             mtx_handle.send(job).context(JobDispatchError)
         } else {
             Err(Error::WorkerNotStarted)

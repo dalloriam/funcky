@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -21,7 +22,6 @@ use warp::{
 use super::message::{ErrorMessage, Message};
 use super::zip;
 use crate::funcky::{DropDir, Error as MgError, FunckManager};
-use warp::filters::reply::header;
 
 impl warp::reject::Reject for MgError {}
 
@@ -30,6 +30,15 @@ pub enum Error {
     FailedToReadBody {
         source: warp::Error,
     },
+
+    FailedToWriteBody {
+        source: io::Error,
+    },
+
+    FailedToDeleteSourceBundle {
+        source: io::Error,
+    },
+
     #[snafu(display("{}", source))]
     ManagerAddError {
         source: MgError,
@@ -71,14 +80,15 @@ async fn add_part(
     // Save zip file.
     let dst_zip_path = NamedTempFile::new_in(&manager.cfg.tmp_dir).unwrap();
     log::debug!("writing source zip to {}", dst_zip_path.path().display());
-    fs::write(&dst_zip_path.path(), body.bytes()).unwrap(); // TODO: Handle.
+    fs::write(&dst_zip_path.path(), body.bytes()).context(FailedToWriteBody)?;
 
     // Extract zip file.
     let tgt_dir = DropDir::new(
         manager.cfg.tmp_dir.join(project_name),
         project_name.to_string_lossy().as_ref(),
     )
-    .unwrap(); // TODO: Handle
+    .context(FailedToWriteBody)?;
+
     log::debug!(
         "unzip {} => {}",
         dst_zip_path.path().display(),
@@ -88,7 +98,7 @@ async fn add_part(
     zip::unzip(&dst_zip_path.path(), &tgt_dir.path()).unwrap();
 
     // Delete zip file.
-    fs::remove_file(dst_zip_path).unwrap(); // TODO: Handle.
+    fs::remove_file(dst_zip_path).context(FailedToDeleteSourceBundle)?;
 
     // Add to manager.
     manager.add(tgt_dir).context(ManagerAddError)
@@ -143,14 +153,13 @@ pub async fn call(
             let body = Body::from(Vec::from(resp.body()));
             let mut http_resp = reply::Response::new(body);
             for (k, v) in resp.metadata().iter().filter_map(|(a, b)| {
-                let name_maybe = header_name(a);
-                let val_maybe = header_val(b);
-                if name_maybe.is_ok() && val_maybe.is_ok() {
-                    Some((name_maybe.unwrap(), val_maybe.unwrap()))
-                } else {
-                    log::warn!("skipped invalid header: [{}={}]", a, b);
-                    None
+                if let Ok(name) = header_name(a) {
+                    if let Ok(val) = header_val(b) {
+                        return Some((name, val));
+                    }
                 }
+                log::warn!("skipped invalid header: [{}={}]", a, b);
+                None
             }) {
                 http_resp.headers_mut().insert(k, v);
             }

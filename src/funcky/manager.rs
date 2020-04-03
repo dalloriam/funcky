@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::ops::DerefMut;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
 use funck::{Request, Response};
 
-use snafu::{ResultExt, Snafu};
+use snafu::{ensure, ResultExt, Snafu};
 
 use super::compiler;
 pub use super::loader::Error as LoaderError;
@@ -27,6 +27,10 @@ pub enum Error {
     InitializationError {
         source: io::Error,
     },
+    CompileWorkerStartError {
+        source: compiler::Error,
+    },
+    ManagerAlreadyStarted,
     MissingFileName,
     MissingSharedObject,
     LoaderLockFailure,
@@ -70,9 +74,13 @@ impl FunckManager {
         Ok(manager)
     }
 
-    pub fn start(&mut self) {
-        assert!(self.result_thread_handle.is_none()); // TODO: Proper handle.
-        let result_rx = self.compile_worker.start();
+    pub fn start(&mut self) -> Result<()> {
+        ensure!(self.result_thread_handle.is_none(), ManagerAlreadyStarted);
+
+        let result_rx = self
+            .compile_worker
+            .start()
+            .context(CompileWorkerStartError)?;
         let loader = self.loader.clone();
         let so_directory = self.cfg.shared_object_directory.clone();
         let tracker = self.status_tracker.clone();
@@ -80,6 +88,26 @@ impl FunckManager {
             FunckManager::shared_object_install_loop(loader, tracker, so_directory, result_rx)
         });
         self.result_thread_handle = Some(result_thread_handle);
+        Ok(())
+    }
+
+    fn install_shared_object(
+        res: &compiler::Response,
+        loader: Arc<RwLock<FunckLoader>>,
+        so_dir: &Path,
+    ) -> Result<()> {
+        // Move the shared object file to the managed .so directory.
+        let output_file_name = res.so_path.file_name().ok_or(Error::MissingFileName)?;
+
+        let so_file_path = so_dir.join(output_file_name);
+        fs::rename(&res.so_path, &so_file_path).context(CantMoveSharedObject)?;
+
+        let mut loader_guard = loader.write().map_err(|_e| Error::LoaderLockFailure)?;
+        loader_guard
+            .load_funcktion(&res.so_path)
+            .context(LoadError)?;
+
+        Ok(())
     }
 
     fn shared_object_install_loop(
@@ -91,23 +119,14 @@ impl FunckManager {
         loop {
             match so_rx.recv() {
                 Ok(res) => {
-                    // Move the shared object file to the managed .so directory.
-                    let output_file_name = res
-                        .so_path
-                        .file_name()
-                        .ok_or(Error::MissingFileName)
-                        .unwrap(); // TODO: HANDLE Fail if no file name because filename is used to find the .so file.
-
-                    let so_file_path = so_dir.join(output_file_name);
-                    fs::rename(&res.so_path, &so_file_path)
-                        .context(CantMoveSharedObject)
-                        .unwrap(); // TODO: Handle
-
-                    let mut loader_guard = loader.write().unwrap(); // TODO: Handle.
-                    loader_guard.load_funcktion(&res.so_path).unwrap();
-                    // TODO: Handle.
-
-                    status.update_status(&res.job_name, Status::Ready);
+                    match FunckManager::install_shared_object(&res, loader.clone(), &so_dir) {
+                        Ok(_) => {
+                            status.update_status(&res.job_name, Status::Ready);
+                        }
+                        Err(e) => {
+                            log::error!("install error: {}", e.to_string());
+                        }
+                    }
                 }
                 Err(_e) => {
                     log::info!("shared object installer disconnected");
