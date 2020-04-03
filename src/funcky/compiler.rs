@@ -26,8 +26,14 @@ pub enum Error {
     #[snafu(display("The final shared object file path ({}) is invalid: {}", path.display(), source))]
     InvalidOutputPath { source: io::Error, path: PathBuf },
 
+    #[snafu(display("Failed to acquire the job channel mutex"))]
+    JobLockError,
+
     #[snafu(display("Couldn't send the job to the compilation worker: {}", source))]
     JobDispatchError { source: mpsc::SendError<Request> },
+
+    #[snafu(display("Worker already started"))]
+    WorkerAlreadyStarted,
 
     #[snafu(display("Compile worker is not started"))]
     WorkerNotStarted,
@@ -118,8 +124,8 @@ impl Worker {
         }
     }
 
-    pub fn start(&mut self) -> mpsc::Receiver<Response> {
-        assert!(self.handle.is_none()); // TODO: Handle properly
+    pub fn start(&mut self) -> Result<mpsc::Receiver<Response>, Error> {
+        ensure!(self.handle.is_none(), WorkerAlreadyStarted);
         let (job_tx, job_rx) = mpsc::channel();
         let (result_tx, result_rx) = mpsc::channel();
         let dst_path = self.shared_object_destination.clone();
@@ -130,7 +136,7 @@ impl Worker {
             job_tx: Mutex::new(job_tx),
         };
         self.handle = Some(work_handle);
-        result_rx
+        Ok(result_rx)
     }
 
     fn compile_loop(
@@ -198,7 +204,7 @@ impl Worker {
 
     pub fn new_job(&self, job: Request) -> Result<(), Error> {
         if let Some(worker) = &self.handle {
-            let mtx_handle = worker.job_tx.lock().unwrap(); // TODO: Handle
+            let mtx_handle = worker.job_tx.lock().map_err(|_e| Error::JobLockError)?;
             mtx_handle.send(job).context(JobDispatchError)
         } else {
             Err(Error::WorkerNotStarted)

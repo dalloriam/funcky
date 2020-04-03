@@ -37,11 +37,6 @@ impl StatusTracker {
         );
     }
 
-    pub fn get_status(&self, fn_name: &str) -> Option<Status> {
-        let stat_guard = self.registrations.read().unwrap(); // TODO: Handle.
-        stat_guard.get(fn_name).cloned().map(|f| f.status)
-    }
-
     pub fn update_status(&self, fn_name: &str, new_status: Status) {
         let mut stat_guard = self.registrations.write().unwrap(); // TODO: Handle.
         let stat = stat_guard.get_mut(fn_name).unwrap(); // TODO: Handle.
@@ -62,7 +57,7 @@ impl StatusTracker {
 
     pub fn all(&self) -> HashMap<String, FuncktionEntry> {
         let mut hsh = HashMap::new();
-        let mut stat_guard = self.registrations.read().unwrap(); // TODO: Handle.
+        let stat_guard = self.registrations.read().unwrap(); // TODO: Handle.
 
         for (k, v) in stat_guard.iter() {
             hsh.insert(k.clone(), v.clone());

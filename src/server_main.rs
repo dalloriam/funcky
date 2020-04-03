@@ -47,7 +47,7 @@ async fn main() {
     }
 
     let mut manager = r_manager.unwrap();
-    manager.start();
+    manager.start().unwrap();
 
     log::info!("server starting up...");
     let mut server = Server::new(manager);

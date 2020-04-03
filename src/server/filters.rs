@@ -52,6 +52,7 @@ fn stat(
     manager: Arc<FunckManager>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::get()
+        .and(warp::path(STAT_ROUTE_PATH))
         .and(with_manager(manager))
         .and_then(handlers::stat)
 }
