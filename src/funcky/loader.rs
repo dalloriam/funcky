@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use libloading::{Library, Symbol};
 
-use funck::Funcktion;
+use funck::{Funcktion, Request, Response};
 
 use snafu::{ResultExt, Snafu};
 
@@ -36,26 +36,18 @@ pub enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-/// The FunckLoader manages all Funcks currently loaded, as well as their associated dylibs.
-pub struct FunckLoader {
-    funcks: HashMap<String, Box<dyn Funcktion>>,
-    loaded_libraries: HashMap<String, Library>,
+struct LoadedFunck {
+    pub funck: Box<dyn Funcktion>,
+    pub lib: Library,
 }
 
-impl FunckLoader {
-    pub fn new() -> FunckLoader {
-        FunckLoader {
-            funcks: HashMap::new(),
-            loaded_libraries: HashMap::new(),
-        }
-    }
-
-    pub fn load_funcktion<P: AsRef<OsStr>>(&mut self, dylib_file: P) -> Result<()> {
+impl LoadedFunck {
+    pub fn load<P: AsRef<Path>>(dylib_file: P) -> Result<LoadedFunck> {
         let lib = Library::new(dylib_file.as_ref()).context(FailedToLoadLibrary {
             path: PathBuf::from(dylib_file.as_ref()),
         })?;
 
-        let funcktion: Box<dyn Funcktion> = unsafe {
+        let funck: Box<dyn Funcktion> = unsafe {
             type FunckCreate = unsafe fn() -> *mut dyn Funcktion;
             const CTOR_SYMBOL: &[u8] = b"_funck_create";
             let constructor: Symbol<FunckCreate> = lib.get(CTOR_SYMBOL).context(MissingSymbol {
@@ -68,40 +60,89 @@ impl FunckLoader {
             Box::from_raw(boxed_raw)
         };
 
-        self.loaded_libraries
-            .insert(String::from(funcktion.name()), lib);
-        self.funcks
-            .insert(String::from(funcktion.name()), funcktion);
+        log::debug!(
+            "loaded funcktion <{}> from shared object [{}]",
+            funck.name(),
+            dylib_file.as_ref().display()
+        );
+        Ok(LoadedFunck { funck, lib })
+    }
+}
 
-        Ok(())
+/// The FunckLoader manages all Funcks currently loaded, as well as their associated dylibs.
+pub struct FunckLoader {
+    funcks: HashMap<String, LoadedFunck>,
+    lib_index: HashMap<String, String>,
+}
+
+impl FunckLoader {
+    pub fn new() -> FunckLoader {
+        FunckLoader {
+            funcks: HashMap::new(),
+            lib_index: HashMap::new(),
+        }
     }
 
-    pub fn call(&self, function_name: &str) -> Result<()> {
+    pub fn load_funcktion<P: AsRef<Path>>(&mut self, dylib_file: P) -> Result<String> {
+        log::debug!(
+            "request load of shared object: {}",
+            dylib_file.as_ref().to_string_lossy()
+        );
+
+        let library_name = dylib_file
+            .as_ref()
+            .file_stem()
+            .unwrap_or("libunknown".as_ref())
+            .to_string_lossy()
+            .to_string();
+
+        self.unload_library(&library_name);
+
+        let foreign_funck = LoadedFunck::load(dylib_file)?;
+
+        let fn_name = String::from(foreign_funck.funck.name());
+
+        self.lib_index.insert(library_name, fn_name.clone());
+        self.funcks.insert(fn_name.clone(), foreign_funck);
+
+        Ok(fn_name)
+    }
+
+    pub fn call(&self, function_name: &str, request: Request) -> Result<Response> {
         self.funcks
             .get(function_name)
             .ok_or(Error::UnknownFunction {
                 name: String::from(function_name),
             })?
-            ._call_internal()
+            .funck
+            ._call_internal(request)
             .context(CallError {
                 name: String::from(function_name),
-            })?;
-        Ok(())
+            })
+    }
+
+    fn unload_library(&mut self, library_name: &str) {
+        if let Some(fnk_name) = self.lib_index.remove(library_name) {
+            if let Some(fnk) = self.funcks.remove(&fnk_name) {
+                // Force dropping of lib.
+                drop(fnk);
+                log::debug!("unloaded {}", fnk_name);
+            }
+        }
     }
 
     fn unload(&mut self) {
-        self.funcks.clear();
-
-        for (lib_n, lib) in self.loaded_libraries.drain() {
-            drop(lib_n);
-            drop(lib);
+        self.lib_index.clear();
+        for (fnk_n, fnk) in self.funcks.drain() {
+            drop(fnk_n);
+            drop(fnk);
         }
     }
 }
 
 impl Drop for FunckLoader {
     fn drop(&mut self) {
-        if !self.funcks.is_empty() || !self.loaded_libraries.is_empty() {
+        if !self.funcks.is_empty() || !self.lib_index.is_empty() {
             self.unload();
         }
     }

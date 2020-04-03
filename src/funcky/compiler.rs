@@ -1,13 +1,13 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::{mpsc, Mutex};
+use std::process::{Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use snafu::{ensure, ResultExt, Snafu};
 
-use super::{DirHook, DropDir};
+use super::{DirHook, DropDir, Status, StatusTracker};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -31,6 +31,11 @@ pub enum Error {
 
     #[snafu(display("Compile worker is not started"))]
     WorkerNotStarted,
+}
+
+pub struct Response {
+    pub so_path: PathBuf,
+    pub job_name: String,
 }
 
 pub struct Request {
@@ -66,6 +71,8 @@ impl Request {
         let mut cmd = Command::new("cargo")
             .arg("build")
             .arg("--release")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()) // TODO: Get back combined output if build fails.
             .spawn()
             .context(BuildSpawnError)?;
 
@@ -95,23 +102,29 @@ struct WorkHandle {
 pub struct Worker {
     handle: Option<WorkHandle>,
     shared_object_destination: PathBuf,
+    status_tracker: Arc<StatusTracker>,
 }
 
 impl Worker {
-    pub fn new<P: AsRef<Path>>(shared_object_path: P) -> Worker {
+    pub fn new<P: AsRef<Path>>(
+        shared_object_path: P,
+        status_tracker: Arc<StatusTracker>,
+    ) -> Worker {
         let shared_object_destination = PathBuf::from(shared_object_path.as_ref());
         Worker {
             handle: None,
             shared_object_destination,
+            status_tracker,
         }
     }
 
-    pub fn start(&mut self) -> mpsc::Receiver<PathBuf> {
+    pub fn start(&mut self) -> mpsc::Receiver<Response> {
         assert!(self.handle.is_none()); // TODO: Handle properly
         let (job_tx, job_rx) = mpsc::channel();
         let (result_tx, result_rx) = mpsc::channel();
         let dst_path = self.shared_object_destination.clone();
-        let handle = thread::spawn(move || Worker::compile_loop(job_rx, result_tx, dst_path));
+        let stat = self.status_tracker.clone();
+        let handle = thread::spawn(move || Worker::compile_loop(job_rx, result_tx, dst_path, stat));
         let work_handle = WorkHandle {
             handle,
             job_tx: Mutex::new(job_tx),
@@ -122,34 +135,63 @@ impl Worker {
 
     fn compile_loop(
         incoming_jobs: mpsc::Receiver<Request>,
-        result_tx: mpsc::Sender<PathBuf>,
+        result_tx: mpsc::Sender<Response>,
         so_out_dir: PathBuf,
+        status_tracker: Arc<StatusTracker>,
     ) {
         loop {
             match incoming_jobs.recv() {
-                Ok(job) => match job.execute() {
-                    Ok(so_file) => {
-                        // Move the so_file from the temp dir to the dest dir.
-                        let fname_maybe = so_file.file_name();
-                        if fname_maybe.is_none() {
-                            log::error!("shared object file has no file name");
-                            continue;
-                        }
+                Ok(job) => {
+                    status_tracker.update_status(&job.source_directory.name, Status::Compiling);
+                    match job.execute() {
+                        Ok(so_file) => {
+                            // Move the so_file from the temp dir to the dest dir.
+                            let fname_maybe = so_file.file_name();
+                            if fname_maybe.is_none() {
+                                let e = String::from("shared object has no file name");
+                                log::error!("{}", e);
+                                status_tracker.update_status(
+                                    &job.source_directory.name,
+                                    Status::Failed(format!("{}", e)),
+                                );
+                                continue;
+                            }
 
-                        let fname = fname_maybe.unwrap();
-                        let dst_so_file = so_out_dir.join(fname);
-                        if let Err(e) = fs::rename(so_file, &dst_so_file) {
-                            log::error!("error moving shared object file: {}", e);
-                            continue;
-                        }
+                            let fname = fname_maybe.unwrap();
+                            let dst_so_file = so_out_dir.join(fname);
+                            if let Err(e) = fs::rename(so_file, &dst_so_file) {
+                                log::error!("error moving shared object file: {}", e);
+                                status_tracker.update_status(
+                                    &job.source_directory.name,
+                                    Status::Failed(format!("{}", e)),
+                                );
+                                continue;
+                            }
 
-                        if let Err(e) = result_tx.send(dst_so_file) {
-                            log::error!("error sending result: {}", e);
+                            if let Err(e) = result_tx.send(Response {
+                                so_path: dst_so_file,
+                                job_name: job.source_directory.name.clone(),
+                            }) {
+                                log::error!("error sending result: {}", e);
+                                status_tracker.update_status(
+                                    &job.source_directory.name,
+                                    Status::Failed(format!("{}", e)),
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("compile error: {}", e);
+                            status_tracker.update_status(
+                                &job.source_directory.name,
+                                Status::Failed(format!("{}", e)),
+                            )
                         }
                     }
-                    Err(e) => log::error!("compile error: {}", e),
-                },
-                Err(_e) => log::info!("compile job channel disconnected"),
+                }
+                Err(_e) => {
+                    // Channel was disconnected.
+                    break;
+                }
             };
         }
     }

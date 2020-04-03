@@ -1,14 +1,21 @@
+mod deploy;
+
 use clap::Clap;
 
-use snafu::Snafu;
+use rood::cli::OutputManager;
+
+use snafu::{ResultExt, Snafu};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Snafu)]
-enum Error {}
+pub enum Error {
+    DeployFailed { source: deploy::Error },
+}
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Clap)]
 pub enum Action {
     #[clap(name = "deploy")]
     Deploy(deploy::DeployCommand),
@@ -26,6 +33,12 @@ pub struct CLI {
 
 impl CLI {
     pub async fn run(&self) -> Result<()> {
+        let output_manager = OutputManager::new(self.verbose);
+
+        match &self.action {
+            Action::Deploy(cmd) => cmd.run(output_manager).await.context(DeployFailed)?,
+        }
+
         Ok(())
     }
 }

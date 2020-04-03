@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use bytes::Buf;
@@ -10,11 +12,16 @@ use snafu::{ResultExt, Snafu};
 
 use tempfile::NamedTempFile;
 
-use warp::{http::StatusCode, reply};
+use warp::{
+    http::{header::HeaderName, HeaderValue, StatusCode},
+    hyper::Body,
+    reply,
+};
 
 use super::message::{ErrorMessage, Message};
 use super::zip;
 use crate::funcky::{DropDir, Error as MgError, FunckManager};
+use warp::filters::reply::header;
 
 impl warp::reject::Reject for MgError {}
 
@@ -33,6 +40,16 @@ pub enum Error {
     CallError {
         source: MgError,
     },
+
+    InvalidHeader,
+}
+
+fn header_name(name: &str) -> Result<HeaderName, Error> {
+    HeaderName::from_str(name).map_err(|_e| Error::InvalidHeader)
+}
+
+fn header_val(name: &str) -> Result<HeaderValue, Error> {
+    HeaderValue::from_str(name).map_err(|_e| Error::InvalidHeader)
 }
 
 async fn add_part(
@@ -57,7 +74,11 @@ async fn add_part(
     fs::write(&dst_zip_path.path(), body.bytes()).unwrap(); // TODO: Handle.
 
     // Extract zip file.
-    let tgt_dir = DropDir::new(manager.cfg.tmp_dir.join(project_name)).unwrap(); // TODO: Handle
+    let tgt_dir = DropDir::new(
+        manager.cfg.tmp_dir.join(project_name),
+        project_name.to_string_lossy().as_ref(),
+    )
+    .unwrap(); // TODO: Handle
     log::debug!(
         "unzip {} => {}",
         dst_zip_path.path().display(),
@@ -96,13 +117,45 @@ pub async fn add(
     ))
 }
 
+pub async fn stat(manager: Arc<FunckManager>) -> Result<impl warp::Reply, warp::Rejection> {
+    log::info!("GET/stat");
+
+    let stats = manager.stat();
+    Ok(reply::json(&stats))
+}
+
 pub async fn call(
     manager: Arc<FunckManager>,
+    body: bytes::Bytes,
     path: warp::path::Tail,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     log::info!("POST/{}", path.as_str());
-    match manager.call(path.as_str()) {
-        Ok(_) => Ok(reply::json(&Message::new("OK"))),
+
+    let body_vec = if body.is_empty() {
+        Vec::new()
+    } else {
+        body.bytes().to_vec()
+    };
+    let req = funck::Request::new(body_vec, HashMap::new());
+
+    match manager.call(path.as_str(), req) {
+        Ok(resp) => {
+            let body = Body::from(Vec::from(resp.body()));
+            let mut http_resp = reply::Response::new(body);
+            for (k, v) in resp.metadata().iter().filter_map(|(a, b)| {
+                let name_maybe = header_name(a);
+                let val_maybe = header_val(b);
+                if name_maybe.is_ok() && val_maybe.is_ok() {
+                    Some((name_maybe.unwrap(), val_maybe.unwrap()))
+                } else {
+                    log::warn!("skipped invalid header: [{}={}]", a, b);
+                    None
+                }
+            }) {
+                http_resp.headers_mut().insert(k, v);
+            }
+            Ok(http_resp)
+        }
         Err(e) => Err(warp::reject::custom(e)),
     }
 }

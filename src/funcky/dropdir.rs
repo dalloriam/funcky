@@ -2,15 +2,18 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+// TODO: Rename to dropjob.
 pub struct DropDir {
     path: PathBuf,
+    pub name: String, // Name of the drop job.
 }
 
 impl DropDir {
-    pub fn new<T: AsRef<Path>>(path: T) -> io::Result<DropDir> {
+    pub fn new<T: AsRef<Path>>(path: T, name: &str) -> io::Result<DropDir> {
         fs::create_dir_all(path.as_ref())?;
         Ok(DropDir {
             path: PathBuf::from(path.as_ref()),
+            name: String::from(name),
         })
     }
 

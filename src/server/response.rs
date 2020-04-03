@@ -11,6 +11,9 @@ pub fn get_serializable(err: &FnError) -> impl Serialize {
         FnError::CallError {
             source: LoaderError::UnknownFunction { .. },
         } => ErrorMessage::new(err),
+        FnError::CallError {
+            source: LoaderError::CallError { source, .. },
+        } => ErrorMessage::new(source),
         _ => ErrorMessage::new(&String::from("Internal Server Error")),
     }
 }
