@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use funcky::FunckManager;
+
 use snafu::{ensure, ResultExt, Snafu};
 
 use tokio::sync::oneshot;
 use tokio::task::{spawn, JoinError, JoinHandle};
 
 use super::filters;
-use crate::funcky::FunckManager;
 
 #[derive(Debug, Snafu)]
 pub enum ServerError {

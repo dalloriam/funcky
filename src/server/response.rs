@@ -1,10 +1,11 @@
+use funcky::{Error as FnError, LoaderError};
+
 use serde::Serialize;
 
 use warp::http::StatusCode;
 use warp::reject::Rejection;
 
 use super::message::ErrorMessage;
-use crate::funcky::{Error as FnError, LoaderError};
 
 pub fn get_serializable(err: &FnError) -> impl Serialize {
     match err {

@@ -9,7 +9,6 @@ use env_logger::Env;
 mod server;
 use server::Server;
 
-mod funcky;
 use funcky::{Config, FunckManager};
 
 const SO_DIR: &str = "./shared_object";

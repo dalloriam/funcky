@@ -6,9 +6,13 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
+[lib]
 name = "funcky"
-path = "src/server_main.rs"
+path = "src/funcky/lib.rs"
+
+[[bin]]
+name = "funcky-server"
+path = "src/main.rs"
 
 [dependencies]
 bytes = "0.5"

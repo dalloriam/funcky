@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 use bytes::Buf;
 
+use funcky::{DropDir, Error as MgError, FunckManager};
+
 use futures::StreamExt;
 
 use snafu::{ResultExt, Snafu};
@@ -21,9 +23,6 @@ use warp::{
 
 use super::message::{ErrorMessage, Message};
 use super::zip;
-use crate::funcky::{DropDir, Error as MgError, FunckManager};
-
-impl warp::reject::Reject for MgError {}
 
 #[derive(Debug, Snafu)]
 pub enum Error {

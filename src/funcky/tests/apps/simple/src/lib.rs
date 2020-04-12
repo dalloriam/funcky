@@ -36,4 +36,4 @@ impl TestFn {
     }
 }
 
-funck::export!(TestFn, TestFn::run, "testfn");
+funck::export!(TestFn, TestFn::run, "simple");

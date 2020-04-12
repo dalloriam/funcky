@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
+use funcky::FunckManager;
+
 use warp::Filter;
 
 use super::handlers;
 use super::response::handle_error;
-use crate::funcky::FunckManager;
 
 const ADD_FUNCTION_ROUTE_PATH: &str = "_funck_add";
 const STAT_ROUTE_PATH: &str = "_stat";
