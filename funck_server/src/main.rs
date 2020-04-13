@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use env_logger::Env;
 
+use funck_svc::{Config, FunckManager};
+
 mod server;
 use server::Server;
-
-use funcky::{Config, FunckManager};
 
 const SO_DIR: &str = "./shared_object";
 

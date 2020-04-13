@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use bytes::Buf;
 
-use funcky::{DropDir, Error as MgError, FunckManager};
+use funck_svc::{DropDir, Error as MgError, FunckManager};
 
 use futures::StreamExt;
 

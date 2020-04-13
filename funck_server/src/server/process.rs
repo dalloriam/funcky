@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use funcky::FunckManager;
+use funck_svc::FunckManager;
 
 use snafu::{ensure, ResultExt, Snafu};
 

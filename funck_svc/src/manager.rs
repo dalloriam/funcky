@@ -41,7 +41,7 @@ pub enum Error {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 // TODO: Review error handling. Still not happy.
-impl warp::reject::Reject for Error {}
+//impl warp::reject::Reject for Error {}
 
 pub struct Config {
     pub shared_object_directory: PathBuf,

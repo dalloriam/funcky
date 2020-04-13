@@ -1,4 +1,4 @@
-use funcky::{Error as FnError, LoaderError};
+use funck_svc::{Error as FnError, LoaderError};
 
 use serde::Serialize;
 
