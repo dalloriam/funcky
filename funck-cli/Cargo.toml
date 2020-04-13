@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0"
 clap = { git = "https://github.com/clap-rs/clap/"}
 reqwest = "0.10.4"
 rood = "0.1.4"
-snafu = "0.6"
 tempfile = "3.1.0"
 tokio = {version = "0.2", features = ["macros"]}

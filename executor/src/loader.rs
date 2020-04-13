@@ -107,6 +107,10 @@ impl FunckLoader {
         Ok(fn_name)
     }
 
+    pub fn has(&self, function_name: &str) -> bool {
+        self.funcks.contains_key(function_name)
+    }
+
     pub fn call(&self, function_name: &str, request: Request) -> Result<Response> {
         self.funcks
             .get(function_name)

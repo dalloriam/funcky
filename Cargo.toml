@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "executor",
+    "funck-cli",
+    "funck-server"
+]

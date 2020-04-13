@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use funck_svc::FunckManager;
+use executor::FunckManager;
 
 use warp::Filter;
 

@@ -5,29 +5,19 @@ use std::io;
 use std::iter::FromIterator;
 use std::path::PathBuf;
 
+use anyhow::{anyhow, Context, Result};
+
 use clap::Clap;
 
-use reqwest::multipart;
-use rood::cli::OutputManager;
+use reqwest::{multipart, Response, StatusCode};
 
-use snafu::{ResultExt, Snafu};
+use rood::cli::OutputManager;
 
 use tempfile::TempDir;
 
 use crate::sysutil::zip;
 
 const DEPLOYABLE_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "src"];
-
-#[derive(Debug, Snafu)]
-pub enum Error {
-    FailedToGetCurrentDirectory { source: io::Error },
-    FailedToListFiles { source: io::Error },
-    FailedToCompress { source: io::Error },
-    FailedToReadBundle { source: io::Error },
-    FailedToUploadBundle { source: reqwest::Error },
-}
-
-type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clap)]
 pub struct DeployCommand {
@@ -58,13 +48,15 @@ impl DeployCommand {
 
     async fn zip_and_upload(&self, output: OutputManager, name: &OsStr) -> Result<()> {
         output.step("Create source bundle");
-        let files = self.get_deployable_files().context(FailedToListFiles)?;
+        let files = self
+            .get_deployable_files()
+            .context("Failed to list files to deploy")?;
 
-        let temp_dir = TempDir::new().context(FailedToCompress)?;
+        let temp_dir = TempDir::new().context("Failed to compress into source bundle")?;
         let zip_path = temp_dir
             .path()
             .join(&format!("{}.zip", name.to_string_lossy()));
-        zip::zip_directory(&zip_path, files.as_ref()).context(FailedToCompress)?;
+        zip::zip_directory(&zip_path, files.as_ref())?;
         output
             .push()
             .progress(&format!("Source bundle => {}", zip_path.display()));
@@ -75,24 +67,20 @@ impl DeployCommand {
 
         let form = multipart::Form::new().part(
             "src",
-            multipart::Part::bytes(fs::read(&zip_path).context(FailedToReadBundle)?)
+            multipart::Part::bytes(fs::read(&zip_path)?)
                 .file_name(zip_path.to_string_lossy().to_string()),
         );
 
-        let resp = client
-            .post(&fmted_url)
-            .multipart(form)
-            .send()
-            .await
-            .context(FailedToUploadBundle)?;
-
-        // TODO: Handle response.
-
-        Ok(())
+        let resp: Response = client.post(&fmted_url).multipart(form).send().await?;
+        if resp.status() != StatusCode::OK {
+            Err(anyhow!(resp.text().await?))
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn run(&self, output: OutputManager) -> Result<()> {
-        let tgt_dir = std::fs::canonicalize(&self.path).context(FailedToGetCurrentDirectory)?;
+        let tgt_dir = std::fs::canonicalize(&self.path)?;
         let name = tgt_dir.file_name().unwrap_or("new_funcktion".as_ref());
         output.step(&format!("Deploy [{}]", name.to_string_lossy()));
 

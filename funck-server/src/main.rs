@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use env_logger::Env;
 
-use funck_svc::{Config, FunckManager};
+use executor::{Config, FunckManager};
 
 mod server;
 use server::Server;

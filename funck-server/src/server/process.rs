@@ -1,23 +1,13 @@
 use std::sync::Arc;
 
-use funck_svc::FunckManager;
+use anyhow::{Context, Result};
 
-use snafu::{ensure, ResultExt, Snafu};
+use executor::FunckManager;
 
 use tokio::sync::oneshot;
-use tokio::task::{spawn, JoinError, JoinHandle};
+use tokio::task::{spawn, JoinHandle};
 
 use super::filters;
-
-#[derive(Debug, Snafu)]
-pub enum ServerError {
-    DoubleStartError,
-    ShutdownRequestError,
-    ShutdownError { source: JoinError },
-    StopWithoutStartError,
-}
-
-pub type Result<T, E = ServerError> = std::result::Result<T, E>;
 
 struct SrvProcess {
     pub join_handle: JoinHandle<()>,
@@ -38,11 +28,11 @@ impl Server {
     }
 
     pub fn start(&mut self) -> Result<()> {
-        ensure!(self.handle.is_none(), DoubleStartError);
+        assert!(self.handle.is_none()); // TODO: Handle
 
         let (tx_stop, rx) = oneshot::channel();
         let (_addr, srv) = warp::serve(filters::all(self.manager.clone()))
-            .bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
+            .bind_with_graceful_shutdown(([0, 0, 0, 0], 3030), async {
                 rx.await.ok();
             });
 
@@ -59,14 +49,12 @@ impl Server {
 
     pub async fn stop(&mut self) -> Result<()> {
         log::info!("Shutdown signal received.");
-        let handle = self
-            .handle
-            .take()
-            .ok_or_else(|| ServerError::StopWithoutStartError)?;
-        ensure!(handle.tx_stop.send(()).is_ok(), ShutdownRequestError);
+        let handle = self.handle.take().unwrap(); // TODO: Handle.
+
+        handle.tx_stop.send(()).unwrap(); // TODO: Handle empty error.
 
         log::info!("waiting for server to quit gracefully");
-        handle.join_handle.await.context(ShutdownError)?;
+        handle.join_handle.await.context("Shutdown error")?;
 
         Ok(())
     }

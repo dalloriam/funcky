@@ -183,6 +183,11 @@ impl FunckManager {
         Ok(())
     }
 
+    pub fn has(&self, function_name: &str) -> Result<bool> {
+        let loader_r_guard = self.loader.read().map_err(|_e| Error::LoaderLockFailure)?;
+        Ok(loader_r_guard.has(function_name))
+    }
+
     pub fn add(&self, src_dir: super::DropDir) -> Result<()> {
         // Build the function.
         self.status_tracker.add(&src_dir.name);

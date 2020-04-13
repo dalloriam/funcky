@@ -5,4 +5,4 @@ mod process;
 mod response;
 mod zip;
 
-pub use process::{Server, ServerError};
+pub use process::Server;
